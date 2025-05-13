@@ -21,7 +21,7 @@ This library provides functionality for authenticating with Telegram using **tda
 To install the library, use:
 
 ```bash
-pip install git+https://github.com/stufently/tdata-session-exporter.git
+pip install git+https://github.com/stufently/session-auth-lib.git
 ```
 
 ## Usage
