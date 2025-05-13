@@ -17,13 +17,11 @@ TELEGRAM_SESSION_ENV_KEY = "TELEGRAM_SESSION"
 
 class MyTelegramClient:
     def __init__(self, tdata_name):
-        # Инициализация сессии с конкретным tdata-имя
         self.tdata_name = tdata_name
         self.client = None
         self.me = None
 
     async def authorize(self):
-        # Путь к папке с tdata
         tdata_path = "tdatas/tdata/"
         if not os.path.exists(tdata_path):
             logger.error("Путь tdata не найден: %s", tdata_path)
@@ -39,27 +37,25 @@ class MyTelegramClient:
             logger.error("TFileNotFound: %s", e)
             return False
 
-        # Создаём уникальный хеш для сессии
         session_hash = hashlib.md5("no_proxy".encode()).hexdigest()
         session_file = f"sessions/{self.tdata_name}_{session_hash}.session"
 
         try:
             logger.info("Создание сессии из tdata: %s", session_file)
-            # Получаем клиента из tdata
+            os.makedirs(os.path.dirname(session_file), exist_ok=True)
             self.client = await tdesk.ToTelethon(
                 session_file,
                 UseCurrentSession,
                 api=API.TelegramIOS.Generate(),
                 auto_reconnect=True
             )
-            await self.client.connect()  # Подключаемся к Telegram
-            self.me = await self.client.get_me()  # Получаем данные о себе
+            await self.client.connect()
+            self.me = await self.client.get_me()
 
-            # Сохраняем строку сессии в .env
             string_session = StringSession.save(self.client.session)
-            set_key(".env", TELEGRAM_SESSION_ENV_KEY, string_session)  # Записываем строку сессии в .env
+            set_key(".env", TELEGRAM_SESSION_ENV_KEY, string_session)
 
-            os.remove(session_file)  # Удаляем временный файл сессии
+            os.remove(session_file)
             logger.info("Сессия успешно сохранена в .env")
             return True
 
