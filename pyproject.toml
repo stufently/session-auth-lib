@@ -1,7 +1,7 @@
 [project]
-name = "session-auth-lib"
+name = "tdata-session-exporter"
 version = "0.1.0"
-description = "Telegram user authentication via tdata (Telethon + opentele)"
+description = "Export Telegram Desktop tdata sessions to Telethon string sessions"
 authors = [
   { name = "Romdevv", email = "romdevv@gmail.com" }
 ]
