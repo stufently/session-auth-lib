@@ -1,0 +1,16 @@
+[project]
+name = "session-auth-lib"
+version = "0.1.0"
+description = "Telegram user authentication via tdata (Telethon + opentele)"
+authors = [
+  { name = "Romdevv", email = "romdevv@gmail.com" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.7"
+dependencies = [
+  "telethon>=1.0",
+  "opentele>=1.15.0",
+  "python-dotenv>=0.19.0"
+]
+
+readme = "README.md"
