@@ -27,6 +27,34 @@ To install the library, use:
 pip install git+https://github.com/stufently/session-auth-lib.git
 ```
 
+### Export bundle from tdata (JSON + .session)
+
+Python API (auto path, default output under project root):
+```python
+from tdata_session_exporter.auth import export_bundle_from_tdata_auto
+
+# Сохранит в ./accounts/<basename>/<basename>.json и .session
+ok = export_bundle_from_tdata_auto(
+    tdata_path="/abs/path/to/+2349049675164/tdata",
+    # out_base_dir="/abs/path/to/project/accounts",  # опционально, по умолчанию ./accounts
+    # api_id=2040, api_hash="b18441a1ff607e10a989891a5462e627",  # опционально, по умолчанию Desktop ключи
+)
+print(ok)
+```
+
+Python API (explicit out dir and basename):
+```python
+from tdata_session_exporter.auth import export_bundle_from_tdata_sync
+
+ok = export_bundle_from_tdata_sync(
+    tdata_path="/abs/path/to/tdata",
+    out_dir="/abs/path/to/out",
+    basename="+2349049675164",  # имя файлов без расширения
+    # api_id=2040, api_hash="b18441a1ff607e10a989891a5462e627",  # можно не указывать: стоят по умолчанию
+)
+print(ok)
+```
+
 ## Usage
 
 ### Auth priority

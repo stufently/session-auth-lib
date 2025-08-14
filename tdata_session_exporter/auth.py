@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import hashlib
+import time
 import json
 from pathlib import Path
 from telethon.sessions import StringSession
@@ -80,9 +81,10 @@ def get_proxy():
     return proxy_conn
 
 class MyTelegramClient:
-    def __init__(self, tdata_name=None, bundle_json: str = None):
+    def __init__(self, tdata_name=None, bundle_json: str = None, tdata_path: str = None):
         self.tdata_name = tdata_name
         self.bundle_json = bundle_json or BUNDLE_JSON_PATH
+        self.tdata_path_override = tdata_path
         self.client = None
         self.me = None
         self.proxy_conn = get_proxy()
@@ -133,10 +135,11 @@ class MyTelegramClient:
         
         # Если нет TELEGRAM_SESSION или авторизация через него не удалась,
         # пробуем авторизоваться через tdata
-        if os.path.isdir(SESSION_PATH):
-            logger.info(f"🔄 Использую tdata из {SESSION_PATH} для авторизации.")
+        tdata_path = self.tdata_path_override or SESSION_PATH
+        if os.path.isdir(tdata_path):
+            logger.info(f"🔄 Использую tdata из {tdata_path} для авторизации.")
             try:
-                tdesk = TDesktop(SESSION_PATH)
+                tdesk = TDesktop(tdata_path)
                 if not tdesk.accounts:
                     logger.error("❌ Аккаунты не найдены в tdata")
                     return False
@@ -173,3 +176,126 @@ async def authorize_client(tdata_name=None):
         return client
     else:
         return None
+
+
+def _derive_basename_from_tdata(tdata_path: str) -> str:
+    # Если путь заканчивается на /tdata, берём имя родительской директории, иначе сам basename
+    base = os.path.basename(os.path.normpath(tdata_path))
+    if base.lower() == 'tdata':
+        return os.path.basename(os.path.dirname(os.path.normpath(tdata_path))) or 'account'
+    return base or 'account'
+
+
+def _default_accounts_dir() -> str:
+    # По умолчанию создаём в <cwd>/accounts
+    return os.path.join(os.getcwd(), 'accounts')
+
+
+async def export_bundle_from_tdata(tdata_path: str, out_dir: str, basename: str,
+                                   api_id: int = None, api_hash: str = None) -> bool:
+    """
+    Экспортирует из папки tdata пару файлов: <basename>.session и <basename>.json в out_dir.
+    По умолчанию использует ключи Telegram Desktop (2040/b184...).
+    """
+    if not os.path.isdir(tdata_path):
+        logger.error(f"❌ Директория tdata не найдена: {tdata_path}")
+        return False
+
+    os.makedirs(out_dir, exist_ok=True)
+
+    try:
+        tdesk = TDesktop(tdata_path)
+        if not tdesk.accounts:
+            logger.error("❌ Аккаунты не найдены в tdata")
+            return False
+    except TFileNotFound as e:
+        logger.error(f"❌ TFileNotFound: {e}")
+        return False
+
+    session_path = os.path.join(out_dir, f"{basename}.session")
+    json_path = os.path.join(out_dir, f"{basename}.json")
+
+    if not api_id or not api_hash:
+        api_id = 2040
+        api_hash = "b18441a1ff607e10a989891a5462e627"
+
+    # opentele ожидает класс API, поэтому формируем динамический класс
+    CustomAPI = type(
+        "CustomAPI",
+        (API,),
+        {
+            "api_id": int(api_id),
+            "api_hash": str(api_hash),
+        },
+    )
+
+    try:
+        logger.info(f"🔄 Генерация Telethon .session из tdata → {session_path}")
+        client = await tdesk.ToTelethon(
+            session_path,
+            UseCurrentSession,
+            api=CustomAPI,
+            auto_reconnect=False
+        )
+        async with client:
+            me = await client.get_me()
+
+        cfg = {
+            "app_id": int(CustomAPI.api_id),
+            "app_hash": str(CustomAPI.api_hash),
+            "device": "tdata-export",
+            "sdk": "unknown",
+            "app_version": "unknown",
+            "system_lang_pack": "en",
+            "system_lang_code": "en",
+            "lang_pack": "tdesktop",
+            "lang_code": "en",
+            "twoFA": None,
+            "role": "",
+            "id": getattr(me, 'id', None) if me else None,
+            "phone": None,
+            "username": getattr(me, 'username', None) if me else None,
+            "date_of_birth": None,
+            "date_of_birth_integrity": None,
+            "is_premium": bool(getattr(me, 'premium', False)) if me else False,
+            "has_profile_pic": bool(getattr(me, 'photo', None)) if me else False,
+            "spamblock": None,
+            "register_time": None,
+            "last_check_time": int(time.time()),
+            "avatar": None,
+            "first_name": getattr(me, 'first_name', "") if me else "",
+            "last_name": getattr(me, 'last_name', "") if me else "",
+            "sex": None,
+            "proxy": None,
+            "ipv6": False,
+            "session_file": basename
+        }
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False)
+
+        logger.info(f"✅ Бандл сохранён: {json_path} и {session_path}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Ошибка экспорта бандла из tdata: {e}")
+        return False
+
+
+def export_bundle_from_tdata_auto(tdata_path: str,
+                                  out_base_dir: str = None,
+                                  api_id: int = None,
+                                  api_hash: str = None) -> bool:
+    """
+    Упрощённый экспорт: достаточно указать только путь к tdata.
+    По умолчанию сохранит в <cwd>/accounts/<basename>/{basename}.session и .json,
+    где basename — это имя папки родителя над tdata (например, "+2349049675164").
+    """
+    basename = _derive_basename_from_tdata(tdata_path)
+    base_dir = out_base_dir or _default_accounts_dir()
+    out_dir = os.path.join(base_dir, basename)
+    return asyncio.run(export_bundle_from_tdata(tdata_path, out_dir, basename, api_id, api_hash))
+
+
+def export_bundle_from_tdata_sync(tdata_path: str, out_dir: str, basename: str,
+                                  api_id: int = None, api_hash: str = None) -> bool:
+    """Синхронная обёртка над export_bundle_from_tdata."""
+    return asyncio.run(export_bundle_from_tdata(tdata_path, out_dir, basename, api_id, api_hash))
