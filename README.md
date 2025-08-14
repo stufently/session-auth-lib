@@ -1,6 +1,9 @@
 # Telegram tdata Session Exporter
 
-This library provides functionality for authenticating with Telegram using **tdata** folder and exporting the session string to `.env` file. It's particularly useful for migrating from desktop Telegram clients to Python-based Telethon applications.
+This library provides functionality for authenticating with Telegram using:
+- TELEGRAM_SESSION string (from `.env`)
+- JSON+.session bundle (new)
+- Telegram Desktop `tdata` folder
 
 ## Features
 
@@ -26,6 +29,12 @@ pip install git+https://github.com/stufently/session-auth-lib.git
 
 ## Usage
 
+### Auth priority
+
+1. `TELEGRAM_SESSION` env var
+2. Bundle `JSON + .session` (env `BUNDLE_JSON_PATH` or explicit path)
+3. `tdata` folder
+
 ### Preparing tdata folder
 
 1. Create a `tdatas` folder in your project root
@@ -50,6 +59,20 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+```
+
+### Using bundle explicitly
+
+```python
+from tdata_session_exporter.auth import MyTelegramClient
+import asyncio
+
+async def main():
+    c = MyTelegramClient(bundle_json="/abs/path/accounts/+2349049675164.json")
+    ok = await c.authorize()
+    print(ok, c.me)
+
+asyncio.run(main())
 ```
 
 ### Using the exported session string
