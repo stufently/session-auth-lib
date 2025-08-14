@@ -14,6 +14,8 @@ from opentele.exception import TFileNotFound
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger()
+# Уменьшаем болтливость Telethon
+logging.getLogger("telethon").setLevel(logging.WARNING)
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -21,9 +23,36 @@ load_dotenv()
 # Ключ для переменной окружения, где будет храниться строка сессии
 TELEGRAM_SESSION_ENV_KEY = "TELEGRAM_SESSION"
 TELEGRAM_SESSION = os.getenv(TELEGRAM_SESSION_ENV_KEY, None)
+# Путь к JSON бандла (если задан) — JSON + соседний .session
+BUNDLE_JSON_PATH = os.getenv("BUNDLE_JSON_PATH")
 
 # Путь к директории tdata
 SESSION_PATH = os.getenv("TDATA_PATH", "tdatas/tdata/")
+
+
+def _load_bundle_config(json_path: str):
+    """Загружает JSON бандла и возвращает (cfg, session_path_no_ext)."""
+    with open(json_path, 'r', encoding='utf-8') as f:
+        cfg = json.load(f)
+
+    api_id = cfg.get('app_id') or cfg.get('api_id')
+    api_hash = cfg.get('app_hash')
+    if not api_id or not api_hash:
+        raise ValueError('В JSON отсутствуют app_id/app_hash')
+
+    session_file = cfg.get('session_file')
+    if not session_file:
+        # если не указано — используем имя JSON
+        session_file = os.path.splitext(os.path.basename(json_path))[0]
+
+    session_basename = os.path.splitext(session_file)[0]
+    base_dir = os.path.dirname(os.path.abspath(json_path))
+    session_path_no_ext = os.path.join(base_dir, session_basename)
+
+    cfg['app_id'] = int(api_id)
+    cfg['app_hash'] = str(api_hash)
+    cfg['session_file'] = session_basename
+    return cfg, session_path_no_ext
 
 def get_proxy():
     """Получить прокси-соединение из переменных окружения, если они установлены"""
@@ -51,8 +80,9 @@ def get_proxy():
     return proxy_conn
 
 class MyTelegramClient:
-    def __init__(self, tdata_name=None):
+    def __init__(self, tdata_name=None, bundle_json: str = None):
         self.tdata_name = tdata_name
+        self.bundle_json = bundle_json or BUNDLE_JSON_PATH
         self.client = None
         self.me = None
         self.proxy_conn = get_proxy()
@@ -81,6 +111,25 @@ class MyTelegramClient:
                 logger.error(f"❌ Ошибка авторизации через TELEGRAM_SESSION: {e}")
                 logger.info("🔄 Пробую авторизоваться через tdata...")
                 # Не возвращаем False, а продолжаем пытаться через tdata
+
+        # Попытка авторизации из бандла JSON+.session
+        if self.bundle_json and os.path.exists(self.bundle_json):
+            try:
+                cfg, session_path_no_ext = _load_bundle_config(self.bundle_json)
+                logger.info(f"🔄 Использую бандл JSON+.session: {self.bundle_json}")
+                self.client = TelegramClient(session_path_no_ext, cfg['app_id'], cfg['app_hash'], proxy=self.proxy_conn)
+                async with self.client:
+                    if not await self.client.is_user_authorized():
+                        logger.error("❌ Сессия недействительна или отозвана [bundle]")
+                        return False
+                    self.me = await self.client.get_me()
+                    string_session = StringSession.save(self.client.session)
+                    set_key(".env", TELEGRAM_SESSION_ENV_KEY, string_session)
+                    logger.info(f"✅ Подключено как: {self.me.first_name} (@{self.me.username}) [bundle]")
+                    return True
+            except Exception as e:
+                logger.error(f"❌ Ошибка авторизации через bundle: {e}")
+                # Падать не будем — попробуем tdata
         
         # Если нет TELEGRAM_SESSION или авторизация через него не удалась,
         # пробуем авторизоваться через tdata
