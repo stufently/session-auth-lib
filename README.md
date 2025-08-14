@@ -103,6 +103,42 @@ async def main():
 asyncio.run(main())
 ```
 
+### JSON session (string_session inside JSON)
+
+You can authorize using a JSON file that contains `app_id`, `app_hash` and a Telethon string session. The library accepts any of these keys for the string session: `string_session`, `session_string`, `telethon_string`, `telethon_session`.
+
+Example JSON file:
+
+```json
+{
+  "app_id": 2040,
+  "app_hash": "b18441a1ff607e10a989891a5462e627",
+  "string_session": "1A...your-telethon-string-session...=="
+}
+```
+
+Usage via environment variable:
+
+```bash
+export BUNDLE_JSON_PATH="/abs/path/to/account.json"
+```
+
+Or pass the path explicitly:
+
+```python
+from tdata_session_exporter.auth import MyTelegramClient
+import asyncio
+
+async def main():
+    c = MyTelegramClient(bundle_json="/abs/path/to/account.json")
+    ok = await c.authorize()
+    print(ok, c.me)
+
+asyncio.run(main())
+```
+
+If the JSON does not contain a string session, the library will try to use a neighboring `.session` file with the same basename as the JSON.
+
 ### Using the exported session string
 
 After running the above code, a Telethon session string will be saved in your `.env` file under the key `TELEGRAM_SESSION`. You can use this string directly with Telethon:

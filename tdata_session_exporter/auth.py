@@ -41,6 +41,13 @@ def _load_bundle_config(json_path: str):
     if not api_id or not api_hash:
         raise ValueError('В JSON отсутствуют app_id/app_hash')
 
+    # Поддержка JSON, который содержит строковую сессию Telethon
+    # Возможные ключи: string_session, session_string, telethon_string, telethon_session
+    for k in ('string_session', 'session_string', 'telethon_string', 'telethon_session'):
+        if cfg.get(k):
+            cfg['string_session'] = cfg.get(k)
+            break
+
     session_file = cfg.get('session_file')
     if not session_file:
         # если не указано — используем имя JSON
@@ -119,6 +126,25 @@ class MyTelegramClient:
             try:
                 cfg, session_path_no_ext = _load_bundle_config(self.bundle_json)
                 logger.info(f"🔄 Использую бандл JSON+.session: {self.bundle_json}")
+                # Вариант 1: строковая сессия внутри JSON
+                if cfg.get('string_session'):
+                    try:
+                        self.client = TelegramClient(
+                            StringSession(cfg['string_session']),
+                            int(cfg['app_id']),
+                            str(cfg['app_hash']),
+                            proxy=self.proxy_conn
+                        )
+                        await self.client.start()
+                        self.me = await self.client.get_me()
+                        set_key(".env", TELEGRAM_SESSION_ENV_KEY, cfg['string_session'])
+                        logger.info(f"✅ Подключено как: {self.me.first_name} (@{self.me.username}) [bundle:string_session]")
+                        return True
+                    except Exception as e:
+                        logger.error(f"❌ Не удалось авторизоваться по string_session из JSON: {e}")
+                        # Падать не будем — попробуем через .session файл
+
+                # Вариант 2: рядом лежит .session файл того же basename
                 self.client = TelegramClient(session_path_no_ext, cfg['app_id'], cfg['app_hash'], proxy=self.proxy_conn)
                 async with self.client:
                     if not await self.client.is_user_authorized():
@@ -127,7 +153,7 @@ class MyTelegramClient:
                     self.me = await self.client.get_me()
                     string_session = StringSession.save(self.client.session)
                     set_key(".env", TELEGRAM_SESSION_ENV_KEY, string_session)
-                    logger.info(f"✅ Подключено как: {self.me.first_name} (@{self.me.username}) [bundle]")
+                    logger.info(f"✅ Подключено как: {self.me.first_name} (@{self.me.username}) [bundle:.session]")
                     return True
             except Exception as e:
                 logger.error(f"❌ Ошибка авторизации через bundle: {e}")
