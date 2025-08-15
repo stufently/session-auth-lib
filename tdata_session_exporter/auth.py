@@ -62,6 +62,45 @@ def _load_bundle_config(json_path: str):
     cfg['session_file'] = session_basename
     return cfg, session_path_no_ext
 
+
+def _find_bundle_in_accounts() -> str:
+    """Ищет JSON+.session в папке ./accounts (в корне проекта).
+    Возвращает путь к первому валидному JSON. Если не найдено — пустая строка.
+    """
+    base_dir = os.path.join(os.getcwd(), "accounts")
+    if not os.path.isdir(base_dir):
+        return ""
+
+    # Собираем кандидаты: *.json в accounts/ и accounts/*/
+    json_candidates = []
+    try:
+        for name in os.listdir(base_dir):
+            p = os.path.join(base_dir, name)
+            if os.path.isfile(p) and p.lower().endswith(".json"):
+                json_candidates.append(p)
+            elif os.path.isdir(p):
+                for sub in os.listdir(p):
+                    sp = os.path.join(p, sub)
+                    if os.path.isfile(sp) and sp.lower().endswith(".json"):
+                        json_candidates.append(sp)
+    except Exception:
+        return ""
+
+    # Проверяем пары JSON+.session
+    for json_path in json_candidates:
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+            session_file = cfg.get('session_file')
+            if not session_file:
+                session_file = os.path.splitext(os.path.basename(json_path))[0]
+            session_path = os.path.join(os.path.dirname(json_path), f"{os.path.splitext(session_file)[0]}.session")
+            if os.path.isfile(session_path):
+                return json_path
+        except Exception:
+            continue
+    return ""
+
 def get_proxy():
     """Получить прокси-соединение из переменных окружения, если они установлены"""
     proxy_type = os.getenv("PROXY_TYPE")
@@ -90,7 +129,9 @@ def get_proxy():
 class MyTelegramClient:
     def __init__(self, tdata_name=None, bundle_json: str = None, tdata_path: str = None):
         self.tdata_name = tdata_name
-        self.bundle_json = bundle_json or BUNDLE_JSON_PATH
+        # 1) Явный аргумент; 2) env; 3) auto-search в ./accounts
+        auto_bundle = _find_bundle_in_accounts()
+        self.bundle_json = bundle_json or BUNDLE_JSON_PATH or (auto_bundle if auto_bundle else None)
         self.tdata_path_override = tdata_path
         self.client = None
         self.me = None
@@ -159,9 +200,15 @@ class MyTelegramClient:
                 logger.error(f"❌ Ошибка авторизации через bundle: {e}")
                 # Падать не будем — попробуем tdata
         
-        # Если нет TELEGRAM_SESSION или авторизация через него не удалась,
-        # пробуем авторизоваться через tdata
+        # Если нет TELEGRAM_SESSION/бандла — пробуем tdata
+        # 1) явный tdata_path; 2) env TDATA_PATH; 3) ./tdatas/tdata; 4) ./tdata
         tdata_path = self.tdata_path_override or SESSION_PATH
+        if not os.path.isdir(tdata_path):
+            alt_candidates = [os.path.join(os.getcwd(), 'tdatas', 'tdata'), os.path.join(os.getcwd(), 'tdata')]
+            for cand in alt_candidates:
+                if os.path.isdir(cand):
+                    tdata_path = cand
+                    break
         if os.path.isdir(tdata_path):
             logger.info(f"🔄 Использую tdata из {tdata_path} для авторизации.")
             try:
