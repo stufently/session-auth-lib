@@ -1,7 +1,6 @@
 # Telegram tdata Session Exporter
 
 This library provides functionality for authenticating with Telegram using:
-- TELEGRAM_SESSION string (from `.env`)
 - JSON+.session bundle (new)
 - Telegram Desktop `tdata` folder
 
@@ -9,7 +8,6 @@ This library provides functionality for authenticating with Telegram using:
 
 - Extract session data from Telegram Desktop's `tdata` folder
 - Convert tdata to Telethon session string
-- Automatically save session string to `.env` file
 - Simple async interface
 
 ## Requirements
@@ -59,9 +57,8 @@ print(ok)
 
 ### Auth priority
 
-1. `TELEGRAM_SESSION` env var
-2. Bundle `JSON + .session` (env `BUNDLE_JSON_PATH` or explicit path)
-3. `tdata` folder
+1. Bundle `JSON + .session` (env `BUNDLE_JSON_PATH` or auto-search in `./accounts`)
+2. `tdata` folder
 
 ### Preparing tdata folder
 
@@ -138,32 +135,6 @@ asyncio.run(main())
 ```
 
 If the JSON does not contain a string session, the library will try to use a neighboring `.session` file with the same basename as the JSON.
-
-### Using the exported session string
-
-After running the above code, a Telethon session string will be saved in your `.env` file under the key `TELEGRAM_SESSION`. You can use this string directly with Telethon:
-
-```python
-from telethon import TelegramClient
-from telethon.sessions import StringSession
-from dotenv import load_dotenv
-import os
-import asyncio
-
-async def main():
-    load_dotenv()
-    session_string = os.getenv("TELEGRAM_SESSION")
-    
-    # Create client using your API credentials
-    client = TelegramClient(StringSession(session_string), api_id, api_hash)
-    await client.start()
-    
-    # Now you can use the client
-    print("Connected successfully!")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
 
 ## Troubleshooting
 

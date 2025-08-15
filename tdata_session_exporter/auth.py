@@ -9,7 +9,7 @@ from telethon.sessions import StringSession
 from telethon.sync import TelegramClient
 from opentele.td import TDesktop
 from opentele.api import API, UseCurrentSession
-from dotenv import set_key, load_dotenv
+from dotenv import load_dotenv
 from opentele.exception import TFileNotFound
 
 # Настройка логирования
@@ -18,12 +18,8 @@ logger = logging.getLogger()
 # Уменьшаем болтливость Telethon
 logging.getLogger("telethon").setLevel(logging.WARNING)
 
-# Загружаем переменные окружения
+# Загружаем переменные окружения (для прокси/TDATA_PATH/BUNDLE_JSON_PATH)
 load_dotenv()
-
-# Ключ для переменной окружения, где будет храниться строка сессии
-TELEGRAM_SESSION_ENV_KEY = "TELEGRAM_SESSION"
-TELEGRAM_SESSION = os.getenv(TELEGRAM_SESSION_ENV_KEY, None)
 # Путь к JSON бандла (если задан) — JSON + соседний .session
 BUNDLE_JSON_PATH = os.getenv("BUNDLE_JSON_PATH")
 
@@ -147,21 +143,6 @@ class MyTelegramClient:
         else:
             session_file = f"sessions/tg_monitor_{session_hash}.session"
 
-        # Сначала проверяем наличие TELEGRAM_SESSION в переменных окружения
-        if TELEGRAM_SESSION:
-            logger.info("🔑 Использую TELEGRAM_SESSION из переменных окружения для авторизации Telethon.")
-            try:
-                api = API.TelegramIOS.Generate()
-                self.client = TelegramClient(StringSession(TELEGRAM_SESSION), api.api_id, api.api_hash, proxy=self.proxy_conn)
-                await self.client.start()
-                self.me = await self.client.get_me()
-                logger.info(f"✅ Подключено как: {self.me.first_name} (@{self.me.username}) [TELEGRAM_SESSION]")
-                return True
-            except Exception as e:
-                logger.error(f"❌ Ошибка авторизации через TELEGRAM_SESSION: {e}")
-                logger.info("🔄 Пробую авторизоваться через tdata...")
-                # Не возвращаем False, а продолжаем пытаться через tdata
-
         # Попытка авторизации из бандла JSON+.session
         if self.bundle_json and os.path.exists(self.bundle_json):
             try:
@@ -178,7 +159,6 @@ class MyTelegramClient:
                         )
                         await self.client.start()
                         self.me = await self.client.get_me()
-                        set_key(".env", TELEGRAM_SESSION_ENV_KEY, cfg['string_session'])
                         logger.info(f"✅ Подключено как: {self.me.first_name} (@{self.me.username}) [bundle:string_session]")
                         return True
                     except Exception as e:
@@ -192,15 +172,13 @@ class MyTelegramClient:
                         logger.error("❌ Сессия недействительна или отозвана [bundle]")
                         return False
                     self.me = await self.client.get_me()
-                    string_session = StringSession.save(self.client.session)
-                    set_key(".env", TELEGRAM_SESSION_ENV_KEY, string_session)
                     logger.info(f"✅ Подключено как: {self.me.first_name} (@{self.me.username}) [bundle:.session]")
                     return True
             except Exception as e:
                 logger.error(f"❌ Ошибка авторизации через bundle: {e}")
                 # Падать не будем — попробуем tdata
         
-        # Если нет TELEGRAM_SESSION/бандла — пробуем tdata
+        # Если нет бандла — пробуем tdata
         # 1) явный tdata_path; 2) env TDATA_PATH; 3) ./tdatas/tdata; 4) ./tdata
         tdata_path = self.tdata_path_override or SESSION_PATH
         if not os.path.isdir(tdata_path):
@@ -226,19 +204,13 @@ class MyTelegramClient:
                 )
                 await self.client.connect()
                 self.me = await self.client.get_me()
-                
-                # Сохраняем строку сессии в .env для будущего использования
-                string_session = StringSession.save(self.client.session)
-                set_key(".env", TELEGRAM_SESSION_ENV_KEY, string_session)
-                
                 logger.info(f"✅ Подключено как: {self.me.first_name} (@{self.me.username}) [tdata]")
-                logger.info("Сессия успешно сохранена в .env")
                 return True
             except Exception as e:
                 logger.error(f"❌ Ошибка авторизации через tdata: {e}")
                 return False
         else:
-            logger.error("❌ Не найден ни TELEGRAM_SESSION, ни директория tdata. Авторизация невозможна.")
+            logger.error("❌ Не найден бандл в ./accounts и директория tdata. Авторизация невозможна.")
             return False
 
 
