@@ -99,38 +99,81 @@ def _find_bundle_in_accounts() -> str:
     return ""
 
 def get_proxy():
-    """Получить прокси-соединение из переменных окружения (ОБЯЗАТЕЛЬНО)"""
-    proxy_type = os.getenv("PROXY_TYPE")
-    proxy_host = os.getenv("PROXY_HOST")
-    proxy_port = os.getenv("PROXY_PORT")
-    proxy_username = os.getenv("PROXY_USERNAME")
-    proxy_password = os.getenv("PROXY_PASSWORD")
+    """
+    Получить прокси-соединение из переменных окружения (ОБЯЗАТЕЛЬНО)
+    
+    Формат PROXIES:
+    - host:port                          (socks5 по умолчанию, без авторизации)
+    - host:port:username:password        (socks5 по умолчанию, с авторизацией)
+    - type:host:port                     (с указанием типа, без авторизации)
+    - type:host:port:username:password   (с указанием типа и авторизацией)
+    
+    Примеры:
+    - PROXIES=ansible.9qw.ru:8126:admin:tghyjuki
+    - PROXIES=socks5:ansible.9qw.ru:8126:admin:tghyjuki
+    - PROXIES=proxy.example.com:1080
+    """
+    proxies = os.getenv("PROXIES")
     
     # ОБЯЗАТЕЛЬНАЯ проверка наличия прокси
-    if not (proxy_type and proxy_host and proxy_port):
+    if not proxies:
         raise ValueError(
-            "❌ ПРОКСИ ОБЯЗАТЕЛЕН! Установите переменные окружения: "
-            "PROXY_TYPE, PROXY_HOST, PROXY_PORT"
+            "❌ ПРОКСИ ОБЯЗАТЕЛЕН! Установите переменную окружения PROXIES\n"
+            "Формат: host:port:username:password\n"
+            "Пример: PROXIES=ansible.9qw.ru:8126:admin:пароль"
         )
     
-    # Валидация типа прокси
-    valid_proxy_types = ['socks5', 'socks4', 'http', 'https']
-    if proxy_type.lower() not in valid_proxy_types:
+    # Парсинг строки прокси
+    parts = proxies.strip().split(':')
+    
+    if len(parts) < 2:
         raise ValueError(
-            f"❌ Неверный тип прокси: {proxy_type}. "
-            f"Допустимые типы: {', '.join(valid_proxy_types)}"
+            f"❌ Неверный формат PROXIES: {proxies}\n"
+            "Формат: host:port или host:port:username:password"
         )
+    
+    # Определяем, есть ли тип прокси в начале
+    valid_proxy_types = ['socks5', 'socks4', 'http', 'https']
+    proxy_type = 'socks5'  # По умолчанию
+    proxy_host = None
+    proxy_port = None
+    proxy_username = None
+    proxy_password = None
+    
+    # Проверяем, указан ли тип прокси
+    if parts[0].lower() in valid_proxy_types:
+        # Формат: type:host:port[:username:password]
+        if len(parts) < 3:
+            raise ValueError(
+                f"❌ Неверный формат PROXIES с типом: {proxies}\n"
+                "Формат: type:host:port или type:host:port:username:password"
+            )
+        proxy_type = parts[0].lower()
+        proxy_host = parts[1]
+        proxy_port = parts[2]
+        if len(parts) >= 5:
+            proxy_username = parts[3]
+            proxy_password = parts[4]
+    else:
+        # Формат: host:port[:username:password]
+        proxy_host = parts[0]
+        proxy_port = parts[1]
+        if len(parts) >= 4:
+            proxy_username = parts[2]
+            proxy_password = parts[3]
     
     # Валидация порта
     try:
         port = int(proxy_port)
         if port < 1 or port > 65535:
             raise ValueError(f"❌ Неверный порт прокси: {port}. Должен быть от 1 до 65535")
-    except ValueError:
-        raise ValueError(f"❌ Порт прокси должен быть числом: {proxy_port}")
+    except ValueError as e:
+        if "invalid literal" in str(e):
+            raise ValueError(f"❌ Порт прокси должен быть числом: {proxy_port}")
+        raise
     
     proxy_conn = {
-        'proxy_type': proxy_type.lower(),
+        'proxy_type': proxy_type,
         'addr': proxy_host,
         'port': port,
     }
@@ -140,8 +183,10 @@ def get_proxy():
             'username': proxy_username,
             'password': proxy_password
         })
+        logger.info(f"✅ Прокси настроен: {proxy_type}://{proxy_username}@{proxy_host}:{proxy_port}")
+    else:
+        logger.info(f"✅ Прокси настроен: {proxy_type}://{proxy_host}:{proxy_port}")
     
-    logger.info(f"✅ Прокси настроен: {proxy_type}://{proxy_host}:{proxy_port}")
     return proxy_conn
 
 
