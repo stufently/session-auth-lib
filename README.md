@@ -48,7 +48,9 @@ PROXIES=ansible.9qw.ru:8126:admin:tghyjuki
    ```env
    PROXIES=type:host:port:username:password
    ```
-   Пример: `PROXIES=socks5:ansible.9qw.ru:8126:admin:tghyjuki`
+   Примеры:
+   - SOCKS5: `PROXIES=socks5:ansible.9qw.ru:8126:admin:tghyjuki`
+   - HTTP: `PROXIES=http:proxy.example.com:8080:user:pass`
 
 **Поддерживаемые типы прокси:** 
 - `socks5` (по умолчанию) - SOCKS5 прокси
@@ -97,8 +99,15 @@ pip install git+https://github.com/stufently/session-auth-lib.git
    ```
 
 2. **Создайте файл `.env` с настройками прокси:**
+   
+   Для SOCKS5 (по умолчанию):
    ```env
    PROXIES=ansible.9qw.ru:8126:admin:tghyjuki
+   ```
+   
+   Для HTTP прокси:
+   ```env
+   PROXIES=http:proxy.example.com:8080:user:pass
    ```
 
 3. **Используйте в коде:**
