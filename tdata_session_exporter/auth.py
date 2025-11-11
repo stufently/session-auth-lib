@@ -245,78 +245,149 @@ def validate_proxy_connection(proxy_conn: dict, timeout: int = 10) -> bool:
     
     logger.info(f"🔍 Проверка прокси {proxy_type}://{proxy_host}:{proxy_port}...")
     
-    # Маппинг типов прокси для библиотеки socks
-    proxy_type_map = {
-        'socks5': socks.SOCKS5,
-        'socks4': socks.SOCKS4,
-        'http': socks.HTTP,
-        'https': socks.HTTP,
-    }
-    
-    if proxy_type not in proxy_type_map:
-        raise ValueError(f"❌ Неподдерживаемый тип прокси: {proxy_type}")
-    
-    try:
-        # Создаем сокет с прокси
-        sock = socks.socksocket()
-        sock.settimeout(timeout)
-        
-        # Настраиваем прокси
-        sock.set_proxy(
-            proxy_type=proxy_type_map[proxy_type],
-            addr=proxy_host,
-            port=proxy_port,
-            username=proxy_username,
-            password=proxy_password
-        )
-        
-        # Пытаемся подключиться к публичному серверу Telegram через прокси
-        # Используем один из DC серверов Telegram для проверки
-        test_host = "149.154.167.50"  # Telegram DC2
-        test_port = 443
-        
-        logger.info(f"🔌 Попытка подключения через прокси к {test_host}:{test_port}...")
-        sock.connect((test_host, test_port))
-        sock.close()
-        
-        logger.info(f"✅ Прокси работает корректно: {proxy_type}://{proxy_host}:{proxy_port}")
-        return True
-        
-    except socks.ProxyConnectionError as e:
-        raise ConnectionError(
-            f"❌ Ошибка подключения к прокси {proxy_host}:{proxy_port}\n"
-            f"Прокси-сервер недоступен или отклонил соединение.\n"
-            f"Детали: {str(e)}"
-        )
-    except socks.GeneralProxyError as e:
-        error_msg = str(e).lower()
-        if "authentication" in error_msg or "auth" in error_msg:
+    # Для HTTP/HTTPS прокси используем другой метод проверки
+    if proxy_type.lower() in ['http', 'https']:
+        try:
+            import urllib.request
+            import base64
+            
+            # Формируем URL прокси
+            if proxy_username and proxy_password:
+                proxy_url = f"http://{proxy_username}:{proxy_password}@{proxy_host}:{proxy_port}"
+            else:
+                proxy_url = f"http://{proxy_host}:{proxy_port}"
+            
+            # Настраиваем прокси для urllib
+            proxy_handler = urllib.request.ProxyHandler({
+                'http': proxy_url,
+                'https': proxy_url
+            })
+            opener = urllib.request.build_opener(proxy_handler)
+            
+            # Тестируем подключение к Telegram API
+            test_url = "https://api.telegram.org"
+            logger.info(f"🔌 Попытка HTTP запроса через прокси к {test_url}...")
+            
+            request = urllib.request.Request(test_url)
+            request.add_header('User-Agent', 'Mozilla/5.0')
+            
+            response = opener.open(request, timeout=timeout)
+            response.read()
+            response.close()
+            
+            logger.info(f"✅ HTTP прокси работает корректно: {proxy_type}://{proxy_host}:{proxy_port}")
+            return True
+            
+        except urllib.error.HTTPError as e:
+            if e.code == 407:  # Proxy Authentication Required
+                raise ConnectionError(
+                    f"❌ Ошибка авторизации на HTTP прокси {proxy_host}:{proxy_port}\n"
+                    f"Проверьте правильность username и password.\n"
+                    f"HTTP код: 407 Proxy Authentication Required"
+                )
+            elif e.code in [200, 301, 302, 401, 403, 404]:
+                # Эти коды означают, что прокси работает (дошли до целевого сервера)
+                logger.info(f"✅ HTTP прокси работает корректно: {proxy_type}://{proxy_host}:{proxy_port} (HTTP {e.code})")
+                return True
+            else:
+                raise ConnectionError(
+                    f"❌ HTTP прокси вернул ошибку {e.code}: {e.reason}\n"
+                    f"Прокси: {proxy_host}:{proxy_port}"
+                )
+        except urllib.error.URLError as e:
+            if "timed out" in str(e).lower() or "timeout" in str(e).lower():
+                raise ConnectionError(
+                    f"❌ Превышено время ожидания подключения к HTTP прокси {proxy_host}:{proxy_port}\n"
+                    f"Прокси не отвечает или работает слишком медленно."
+                )
+            else:
+                raise ConnectionError(
+                    f"❌ Ошибка подключения к HTTP прокси {proxy_host}:{proxy_port}\n"
+                    f"Детали: {str(e)}"
+                )
+        except socket.timeout:
             raise ConnectionError(
-                f"❌ Ошибка авторизации на прокси {proxy_host}:{proxy_port}\n"
-                f"Проверьте правильность username и password.\n"
+                f"❌ Превышено время ожидания подключения к HTTP прокси {proxy_host}:{proxy_port}\n"
+                f"Прокси не отвечает или работает слишком медленно."
+            )
+        except Exception as e:
+            raise ConnectionError(
+                f"❌ Неожиданная ошибка при проверке HTTP прокси {proxy_host}:{proxy_port}\n"
                 f"Детали: {str(e)}"
             )
-        else:
+    
+    # Для SOCKS прокси используем библиотеку socks
+    else:
+        # Маппинг типов прокси для библиотеки socks
+        proxy_type_map = {
+            'socks5': socks.SOCKS5,
+            'socks4': socks.SOCKS4,
+        }
+        
+        if proxy_type not in proxy_type_map:
+            raise ValueError(f"❌ Неподдерживаемый тип прокси: {proxy_type}")
+        
+        try:
+            # Создаем сокет с прокси
+            sock = socks.socksocket()
+            sock.settimeout(timeout)
+            
+            # Настраиваем прокси
+            sock.set_proxy(
+                proxy_type=proxy_type_map[proxy_type],
+                addr=proxy_host,
+                port=proxy_port,
+                username=proxy_username,
+                password=proxy_password
+            )
+            
+            # Пытаемся подключиться к публичному серверу Telegram через прокси
+            # Используем один из DC серверов Telegram для проверки
+            test_host = "149.154.167.50"  # Telegram DC2
+            test_port = 443
+            
+            logger.info(f"🔌 Попытка подключения через прокси к {test_host}:{test_port}...")
+            sock.connect((test_host, test_port))
+            sock.close()
+            
+            logger.info(f"✅ Прокси работает корректно: {proxy_type}://{proxy_host}:{proxy_port}")
+            return True
+            
+        except socks.ProxyConnectionError as e:
             raise ConnectionError(
-                f"❌ Ошибка работы прокси {proxy_host}:{proxy_port}\n"
-                f"Прокси не смог установить соединение.\n"
+                f"❌ Ошибка подключения к прокси {proxy_host}:{proxy_port}\n"
+                f"Прокси-сервер недоступен или отклонил соединение.\n"
                 f"Детали: {str(e)}"
             )
-    except socket.gaierror:
-        raise ConnectionError(
-            f"❌ Не удалось разрешить адрес прокси: {proxy_host}\n"
-            f"Проверьте правильность хоста."
-        )
-    except socket.timeout:
-        raise ConnectionError(
-            f"❌ Превышено время ожидания подключения к прокси {proxy_host}:{proxy_port}\n"
-            f"Прокси не отвечает или работает слишком медленно."
-        )
-    except Exception as e:
-        raise ConnectionError(
-            f"❌ Неожиданная ошибка при проверке прокси {proxy_host}:{proxy_port}\n"
-            f"Детали: {str(e)}"
-        )
+        except socks.GeneralProxyError as e:
+            error_msg = str(e).lower()
+            if "authentication" in error_msg or "auth" in error_msg:
+                raise ConnectionError(
+                    f"❌ Ошибка авторизации на прокси {proxy_host}:{proxy_port}\n"
+                    f"Проверьте правильность username и password.\n"
+                    f"Детали: {str(e)}"
+                )
+            else:
+                raise ConnectionError(
+                    f"❌ Ошибка работы прокси {proxy_host}:{proxy_port}\n"
+                    f"Прокси не смог установить соединение.\n"
+                    f"Детали: {str(e)}"
+                )
+        except socket.gaierror:
+            raise ConnectionError(
+                f"❌ Не удалось разрешить адрес прокси: {proxy_host}\n"
+                f"Проверьте правильность хоста."
+            )
+        except socket.timeout:
+            raise ConnectionError(
+                f"❌ Превышено время ожидания подключения к прокси {proxy_host}:{proxy_port}\n"
+                f"Прокси не отвечает или работает слишком медленно."
+            )
+        except Exception as e:
+            raise ConnectionError(
+                f"❌ Неожиданная ошибка при проверке прокси {proxy_host}:{proxy_port}\n"
+                f"Детали: {str(e)}"
+            )
 
 
 class MyTelegramClient:
