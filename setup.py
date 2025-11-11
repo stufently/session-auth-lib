@@ -10,7 +10,8 @@ setup(
     install_requires=[
         "telethon>=1.0",
         "opentele>=1.15.0",
-        "python-dotenv>=0.19.0"
+        "python-dotenv>=0.19.0",
+        "PySocks>=1.7.1"
     ],
     python_requires=">=3.7",
 )
