@@ -4,6 +4,7 @@ import os
 import hashlib
 import time
 import json
+import socket
 from pathlib import Path
 from telethon.sessions import StringSession
 from telethon.sync import TelegramClient
@@ -98,20 +99,40 @@ def _find_bundle_in_accounts() -> str:
     return ""
 
 def get_proxy():
-    """Получить прокси-соединение из переменных окружения, если они установлены"""
+    """Получить прокси-соединение из переменных окружения (ОБЯЗАТЕЛЬНО)"""
     proxy_type = os.getenv("PROXY_TYPE")
     proxy_host = os.getenv("PROXY_HOST")
     proxy_port = os.getenv("PROXY_PORT")
     proxy_username = os.getenv("PROXY_USERNAME")
     proxy_password = os.getenv("PROXY_PASSWORD")
     
+    # ОБЯЗАТЕЛЬНАЯ проверка наличия прокси
     if not (proxy_type and proxy_host and proxy_port):
-        return None
+        raise ValueError(
+            "❌ ПРОКСИ ОБЯЗАТЕЛЕН! Установите переменные окружения: "
+            "PROXY_TYPE, PROXY_HOST, PROXY_PORT"
+        )
+    
+    # Валидация типа прокси
+    valid_proxy_types = ['socks5', 'socks4', 'http', 'https']
+    if proxy_type.lower() not in valid_proxy_types:
+        raise ValueError(
+            f"❌ Неверный тип прокси: {proxy_type}. "
+            f"Допустимые типы: {', '.join(valid_proxy_types)}"
+        )
+    
+    # Валидация порта
+    try:
+        port = int(proxy_port)
+        if port < 1 or port > 65535:
+            raise ValueError(f"❌ Неверный порт прокси: {port}. Должен быть от 1 до 65535")
+    except ValueError:
+        raise ValueError(f"❌ Порт прокси должен быть числом: {proxy_port}")
     
     proxy_conn = {
-        'proxy_type': proxy_type,
+        'proxy_type': proxy_type.lower(),
         'addr': proxy_host,
-        'port': int(proxy_port),
+        'port': port,
     }
     
     if proxy_username and proxy_password:
@@ -120,7 +141,50 @@ def get_proxy():
             'password': proxy_password
         })
     
+    logger.info(f"✅ Прокси настроен: {proxy_type}://{proxy_host}:{proxy_port}")
     return proxy_conn
+
+
+def validate_proxy_connection(proxy_conn: dict, timeout: int = 10) -> bool:
+    """
+    Проверяет доступность прокси-сервера через попытку подключения к сокету.
+    Возвращает True, если прокси доступен, иначе выбрасывает исключение.
+    """
+    proxy_host = proxy_conn['addr']
+    proxy_port = proxy_conn['port']
+    
+    logger.info(f"🔍 Проверка доступности прокси {proxy_host}:{proxy_port}...")
+    
+    try:
+        # Создаем сокет и пытаемся подключиться к прокси
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        result = sock.connect_ex((proxy_host, proxy_port))
+        sock.close()
+        
+        if result == 0:
+            logger.info(f"✅ Прокси доступен: {proxy_host}:{proxy_port}")
+            return True
+        else:
+            raise ConnectionError(
+                f"❌ Не удалось подключиться к прокси {proxy_host}:{proxy_port}. "
+                f"Проверьте правильность данных прокси."
+            )
+    except socket.gaierror:
+        raise ConnectionError(
+            f"❌ Не удалось разрешить адрес прокси: {proxy_host}. "
+            f"Проверьте правильность хоста."
+        )
+    except socket.timeout:
+        raise ConnectionError(
+            f"❌ Превышено время ожидания подключения к прокси {proxy_host}:{proxy_port}. "
+            f"Прокси недоступен или работает некорректно."
+        )
+    except Exception as e:
+        raise ConnectionError(
+            f"❌ Ошибка при проверке прокси {proxy_host}:{proxy_port}: {str(e)}"
+        )
+
 
 class MyTelegramClient:
     def __init__(self, tdata_name=None, bundle_json: str = None, tdata_path: str = None):
@@ -131,7 +195,15 @@ class MyTelegramClient:
         self.tdata_path_override = tdata_path
         self.client = None
         self.me = None
-        self.proxy_conn = get_proxy()
+        
+        # ОБЯЗАТЕЛЬНАЯ проверка прокси при инициализации
+        try:
+            self.proxy_conn = get_proxy()
+            # Проверяем доступность прокси
+            validate_proxy_connection(self.proxy_conn)
+        except (ValueError, ConnectionError) as e:
+            logger.error(f"❌ Ошибка инициализации: {e}")
+            raise
 
     async def authorize(self):
         session_hash = hashlib.md5(json.dumps(self.proxy_conn or {}, sort_keys=True).encode()).hexdigest()[:8]
@@ -215,6 +287,10 @@ class MyTelegramClient:
 
 
 async def authorize_client(tdata_name=None):
+    """
+    Создает и авторизует Telegram клиента.
+    ВНИМАНИЕ: Требует обязательного наличия валидного прокси в ENV.
+    """
     client = MyTelegramClient(tdata_name)
     result = await client.authorize()
     if result:
@@ -241,7 +317,16 @@ async def export_bundle_from_tdata(tdata_path: str, out_dir: str, basename: str,
     """
     Экспортирует из папки tdata пару файлов: <basename>.session и <basename>.json в out_dir.
     По умолчанию использует ключи Telegram Desktop (2040/b184...).
+    ВНИМАНИЕ: Требует обязательного наличия прокси в ENV.
     """
+    # ОБЯЗАТЕЛЬНАЯ проверка прокси
+    try:
+        proxy_conn = get_proxy()
+        validate_proxy_connection(proxy_conn)
+    except (ValueError, ConnectionError) as e:
+        logger.error(f"❌ Ошибка при экспорте: {e}")
+        return False
+    
     if not os.path.isdir(tdata_path):
         logger.error(f"❌ Директория tdata не найдена: {tdata_path}")
         return False
@@ -276,10 +361,12 @@ async def export_bundle_from_tdata(tdata_path: str, out_dir: str, basename: str,
 
     try:
         logger.info(f"🔄 Генерация Telethon .session из tdata → {session_path}")
+        # Используем прокси при экспорте
         client = await tdesk.ToTelethon(
             session_path,
             UseCurrentSession,
             api=CustomAPI,
+            proxy=proxy_conn,
             auto_reconnect=False
         )
         async with client:
