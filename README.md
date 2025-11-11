@@ -17,6 +17,40 @@ This library provides functionality for authenticating with Telegram using:
 - opentele
 - python-dotenv
 
+## ⚠️ ВАЖНО: Обязательное использование прокси
+
+**Библиотека работает ТОЛЬКО через прокси!** Без настроенного прокси работа невозможна.
+
+### Настройка прокси через переменные окружения
+
+Создайте файл `.env` в корне вашего проекта и укажите параметры прокси:
+
+```env
+PROXY_TYPE=socks5
+PROXY_HOST=your-proxy-host.com
+PROXY_PORT=1080
+PROXY_USERNAME=your_username  # опционально
+PROXY_PASSWORD=your_password  # опционально
+```
+
+**Поддерживаемые типы прокси:** `socks5`, `socks4`, `http`, `https`
+
+### Проверка прокси
+
+Библиотека автоматически проверяет:
+- ✅ Наличие всех обязательных переменных окружения (`PROXY_TYPE`, `PROXY_HOST`, `PROXY_PORT`)
+- ✅ Валидность типа прокси
+- ✅ Доступность прокси-сервера (пытается подключиться к указанному хосту и порту)
+
+### Возможные ошибки
+
+- **`❌ ПРОКСИ ОБЯЗАТЕЛЕН!`** - не указаны переменные окружения с данными прокси
+- **`❌ Неверный тип прокси`** - указан неподдерживаемый тип прокси
+- **`❌ Не удалось подключиться к прокси`** - прокси-сервер недоступен или указаны неверные данные
+- **`❌ Превышено время ожидания подключения к прокси`** - прокси не отвечает
+
+Если возникают ошибки с прокси - библиотека **не запустится** и выдаст соответствующее сообщение об ошибке.
+
 ## Installation
 
 To install the library, use:
@@ -27,30 +61,47 @@ pip install git+https://github.com/stufently/session-auth-lib.git
 
 ### Export bundle from tdata (JSON + .session)
 
+**⚠️ ВАЖНО:** Для экспорта также требуется настроенный прокси!
+
 Python API (auto path, default output under project root):
 ```python
 from tdata_session_exporter.auth import export_bundle_from_tdata_auto
+from dotenv import load_dotenv
 
-# Сохранит в ./accounts/<basename>/<basename>.json и .session
-ok = export_bundle_from_tdata_auto(
-    tdata_path="/abs/path/to/+2349049675164/tdata",
-    # out_base_dir="/abs/path/to/project/accounts",  # опционально, по умолчанию ./accounts
-    # api_id=2040, api_hash="b18441a1ff607e10a989891a5462e627",  # опционально, по умолчанию Desktop ключи
-)
-print(ok)
+# Загружаем переменные окружения (включая прокси)
+load_dotenv()
+
+try:
+    # Сохранит в ./accounts/<basename>/<basename>.json и .session
+    # Автоматически проверит прокси перед началом работы
+    ok = export_bundle_from_tdata_auto(
+        tdata_path="/abs/path/to/+2349049675164/tdata",
+        # out_base_dir="/abs/path/to/project/accounts",  # опционально, по умолчанию ./accounts
+        # api_id=2040, api_hash="b18441a1ff607e10a989891a5462e627",  # опционально, по умолчанию Desktop ключи
+    )
+    print("✅ Экспорт успешен!" if ok else "❌ Экспорт не удался")
+except (ValueError, ConnectionError) as e:
+    print(f"❌ Ошибка: {e}")
 ```
 
 Python API (explicit out dir and basename):
 ```python
 from tdata_session_exporter.auth import export_bundle_from_tdata_sync
+from dotenv import load_dotenv
 
-ok = export_bundle_from_tdata_sync(
-    tdata_path="/abs/path/to/tdata",
-    out_dir="/abs/path/to/out",
-    basename="+2349049675164",  # имя файлов без расширения
-    # api_id=2040, api_hash="b18441a1ff607e10a989891a5462e627",  # можно не указывать: стоят по умолчанию
-)
-print(ok)
+# Загружаем переменные окружения (включая прокси)
+load_dotenv()
+
+try:
+    ok = export_bundle_from_tdata_sync(
+        tdata_path="/abs/path/to/tdata",
+        out_dir="/abs/path/to/out",
+        basename="+2349049675164",  # имя файлов без расширения
+        # api_id=2040, api_hash="b18441a1ff607e10a989891a5462e627",  # можно не указывать: стоят по умолчанию
+    )
+    print("✅ Экспорт успешен!" if ok else "❌ Экспорт не удался")
+except (ValueError, ConnectionError) as e:
+    print(f"❌ Ошибка: {e}")
 ```
 
 ## Usage
@@ -67,20 +118,31 @@ print(ok)
 
 ### Using the library
 
+**ВАЖНО:** Перед использованием убедитесь, что настроили переменные окружения для прокси!
+
 ```python
 from tdata_session_exporter import authorize_client
 import asyncio
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения (включая данные прокси)
+load_dotenv()
 
 async def main():
-    # Pass the name of the folder in tdatas/ containing tdata files
-    client = await authorize_client("tdata")
-    if client:
-        print("Authorization successful!")
-        # Now you can use client for Telegram operations
-        me = await client.get_me()
-        print(f"Logged in as {me.first_name} (@{me.username})")
-    else:
-        print("Authorization failed")
+    try:
+        # Pass the name of the folder in tdatas/ containing tdata files
+        # Автоматически проверит и использует прокси из ENV
+        client = await authorize_client("tdata")
+        if client:
+            print("Authorization successful!")
+            # Now you can use client for Telegram operations
+            me = await client.get_me()
+            print(f"Logged in as {me.first_name} (@{me.username})")
+        else:
+            print("Authorization failed")
+    except (ValueError, ConnectionError) as e:
+        print(f"Ошибка: {e}")
+        print("Проверьте настройки прокси в .env файле!")
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -91,11 +153,19 @@ if __name__ == "__main__":
 ```python
 from tdata_session_exporter.auth import MyTelegramClient
 import asyncio
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения (включая прокси)
+load_dotenv()
 
 async def main():
-    c = MyTelegramClient(bundle_json="/abs/path/accounts/+2349049675164.json")
-    ok = await c.authorize()
-    print(ok, c.me)
+    try:
+        # Автоматически проверит прокси при инициализации
+        c = MyTelegramClient(bundle_json="/abs/path/accounts/+2349049675164.json")
+        ok = await c.authorize()
+        print(ok, c.me)
+    except (ValueError, ConnectionError) as e:
+        print(f"❌ Ошибка: {e}")
 
 asyncio.run(main())
 ```
@@ -125,11 +195,19 @@ Or pass the path explicitly:
 ```python
 from tdata_session_exporter.auth import MyTelegramClient
 import asyncio
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения (включая прокси)
+load_dotenv()
 
 async def main():
-    c = MyTelegramClient(bundle_json="/abs/path/to/account.json")
-    ok = await c.authorize()
-    print(ok, c.me)
+    try:
+        # Автоматически проверит прокси при инициализации
+        c = MyTelegramClient(bundle_json="/abs/path/to/account.json")
+        ok = await c.authorize()
+        print(ok, c.me)
+    except (ValueError, ConnectionError) as e:
+        print(f"❌ Ошибка: {e}")
 
 asyncio.run(main())
 ```
@@ -138,6 +216,37 @@ If the JSON does not contain a string session, the library will try to use a nei
 
 ## Troubleshooting
 
+### Ошибки прокси (самые частые)
+
+#### ❌ ПРОКСИ ОБЯЗАТЕЛЕН!
+
+Библиотека не может работать без прокси. Создайте файл `.env` и укажите данные прокси:
+
+```env
+PROXY_TYPE=socks5
+PROXY_HOST=your-proxy-host.com
+PROXY_PORT=1080
+```
+
+#### ❌ Не удалось подключиться к прокси
+
+Возможные причины:
+1. Прокси-сервер выключен или недоступен
+2. Неверный хост или порт
+3. Прокси требует авторизацию, а вы не указали `PROXY_USERNAME` и `PROXY_PASSWORD`
+4. Файрвол блокирует подключение к прокси
+
+Решение:
+- Проверьте работоспособность прокси в браузере или другом приложении
+- Убедитесь, что данные прокси указаны правильно
+- Проверьте, что прокси-сервер работает
+
+#### ❌ Неверный тип прокси
+
+Поддерживаются только: `socks5`, `socks4`, `http`, `https`
+
+Проверьте правильность значения `PROXY_TYPE` в `.env` файле.
+
 ### No account has been loaded
 
 If you get an error like `Unexpected Exception: No account has been loaded`, make sure:
@@ -145,14 +254,16 @@ If you get an error like `Unexpected Exception: No account has been loaded`, mak
 1. Your `tdata` folder contains valid Telegram account data
 2. The folder structure is correct (`tdatas/tdata/` with all Telegram Desktop files inside)
 3. You're using a compatible version of Telegram Desktop (this library has been tested with TD 4.x)
+4. **Прокси настроен правильно** (см. выше)
 
 ### Connection issues
 
 If you have connection problems:
 
-1. Make sure your internet connection is stable
-2. Check if your IP is not blocked by Telegram
-3. Try using a different API (by modifying the code to use a different `API` from `opentele.api`)
+1. **Убедитесь, что прокси настроен и работает корректно** (это обязательное требование!)
+2. Make sure your internet connection is stable
+3. Check if your IP is not blocked by Telegram (или IP вашего прокси)
+4. Try using a different API (by modifying the code to use a different `API` from `opentele.api`)
 
 ## License
 
