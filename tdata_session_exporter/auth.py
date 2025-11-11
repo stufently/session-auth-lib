@@ -191,6 +191,45 @@ def get_proxy():
     return proxy_conn
 
 
+def convert_proxy_for_telethon(proxy_conn: dict) -> tuple:
+    """
+    Конвертирует наш формат прокси в формат Telethon.
+    
+    Telethon ожидает tuple:
+    - Для SOCKS5: (socks.SOCKS5, 'host', port, True, 'username', 'password')
+    - Для HTTP: (socks.HTTP, 'host', port, True, 'username', 'password')
+    
+    Возвращает tuple для использования в TelegramClient
+    """
+    import socks as socks_lib
+    
+    proxy_type = proxy_conn['proxy_type']
+    proxy_host = proxy_conn['addr']
+    proxy_port = proxy_conn['port']
+    proxy_username = proxy_conn.get('username')
+    proxy_password = proxy_conn.get('password')
+    
+    # Маппинг типов прокси
+    proxy_type_map = {
+        'socks5': socks_lib.SOCKS5,
+        'socks4': socks_lib.SOCKS4,
+        'http': socks_lib.HTTP,
+        'https': socks_lib.HTTP,
+    }
+    
+    telethon_proxy_type = proxy_type_map.get(proxy_type.lower())
+    if not telethon_proxy_type:
+        raise ValueError(f"❌ Неподдерживаемый тип прокси: {proxy_type}")
+    
+    # Формируем tuple для Telethon
+    if proxy_username and proxy_password:
+        # С авторизацией
+        return (telethon_proxy_type, proxy_host, proxy_port, True, proxy_username, proxy_password)
+    else:
+        # Без авторизации
+        return (telethon_proxy_type, proxy_host, proxy_port)
+
+
 def validate_proxy_connection(proxy_conn: dict, timeout: int = 10) -> bool:
     """
     Проверяет доступность и работоспособность прокси-сервера.
@@ -321,7 +360,7 @@ class MyTelegramClient:
                             StringSession(cfg['string_session']),
                             int(cfg['app_id']),
                             str(cfg['app_hash']),
-                            proxy=self.proxy_conn
+                            proxy=convert_proxy_for_telethon(self.proxy_conn)
                         )
                         await self.client.start()
                         self.me = await self.client.get_me()
@@ -332,7 +371,7 @@ class MyTelegramClient:
                         # Падать не будем — попробуем через .session файл
 
                 # Вариант 2: рядом лежит .session файл того же basename
-                self.client = TelegramClient(session_path_no_ext, cfg['app_id'], cfg['app_hash'], proxy=self.proxy_conn)
+                self.client = TelegramClient(session_path_no_ext, cfg['app_id'], cfg['app_hash'], proxy=convert_proxy_for_telethon(self.proxy_conn))
                 async with self.client:
                     if not await self.client.is_user_authorized():
                         logger.error("❌ Сессия недействительна или отозвана [bundle]")
@@ -366,7 +405,7 @@ class MyTelegramClient:
                     session_file, 
                     UseCurrentSession,
                     api=API.TelegramIOS.Generate(),
-                    proxy=self.proxy_conn
+                    proxy=convert_proxy_for_telethon(self.proxy_conn)
                 )
                 await self.client.connect()
                 self.me = await self.client.get_me()
@@ -460,7 +499,7 @@ async def export_bundle_from_tdata(tdata_path: str, out_dir: str, basename: str,
             session_path,
             UseCurrentSession,
             api=CustomAPI,
-            proxy=proxy_conn,
+            proxy=convert_proxy_for_telethon(proxy_conn),
             auto_reconnect=False
         )
         async with client:
