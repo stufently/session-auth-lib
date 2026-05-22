@@ -4,17 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tdata-session-exporter"
-version = "0.1.0"
+version = "0.2.0"
 description = "Export Telegram Desktop tdata sessions to Telethon string sessions"
 authors = [
   { name = "Romdevv", email = "romdevv@gmail.com" }
 ]
 license = { text = "MIT" }
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 dependencies = [
-  "telethon>=1.0",
-  "opentele>=1.15.0",
-  "python-dotenv>=0.19.0",
+  "telethon>=1.43.2,<2",
+  "opentele-ng @ git+https://github.com/stufently/opentele.git@main",
+  "python-dotenv>=1.0.0",
   "PySocks>=1.7.1"
 ]
 

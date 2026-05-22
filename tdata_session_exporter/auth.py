@@ -443,13 +443,15 @@ class MyTelegramClient:
 
                 # Вариант 2: рядом лежит .session файл того же basename
                 self.client = TelegramClient(session_path_no_ext, cfg['app_id'], cfg['app_hash'], proxy=convert_proxy_for_telethon(self.proxy_conn))
-                async with self.client:
-                    if not await self.client.is_user_authorized():
-                        logger.error("❌ Сессия недействительна или отозвана [bundle]")
-                        return False
-                    self.me = await self.client.get_me()
-                    logger.info(f"✅ Подключено как: {self.me.first_name} (@{self.me.username}) [bundle:.session]")
-                    return True
+                await self.client.connect()
+                if not await self.client.is_user_authorized():
+                    await self.client.disconnect()
+                    self.client = None
+                    logger.error("❌ Сессия недействительна или отозвана [bundle]")
+                    return False
+                self.me = await self.client.get_me()
+                logger.info(f"✅ Подключено как: {self.me.first_name} (@{self.me.username}) [bundle:.session]")
+                return True
             except Exception as e:
                 logger.error(f"❌ Ошибка авторизации через bundle: {e}")
                 # Падать не будем — попробуем tdata
