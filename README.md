@@ -12,7 +12,7 @@ This library provides functionality for authenticating with Telegram using:
 
 ## Requirements
 
-- Python 3.7+
+- Python 3.10+
 - Telethon
 - opentele
 - python-dotenv

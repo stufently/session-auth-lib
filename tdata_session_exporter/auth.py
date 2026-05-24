@@ -84,11 +84,14 @@ def _find_bundle_in_accounts() -> str:
     except Exception:
         return ""
 
-    # Проверяем пары JSON+.session
+    # Проверяем: JSON со встроенной string_session ИЛИ пару JSON+.session
+    _string_session_keys = ('string_session', 'session_string', 'telethon_string', 'telethon_session')
     for json_path in json_candidates:
         try:
             with open(json_path, 'r', encoding='utf-8') as f:
                 cfg = json.load(f)
+            if any(cfg.get(k) for k in _string_session_keys):
+                return json_path
             session_file = cfg.get('session_file')
             if not session_file:
                 session_file = os.path.splitext(os.path.basename(json_path))[0]
