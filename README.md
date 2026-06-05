@@ -27,7 +27,7 @@ This library provides functionality for authenticating with Telegram using:
 Создайте файл `.env` в корне вашего проекта и укажите прокси в одной строке:
 
 ```env
-PROXIES=ansible.9qw.ru:8126:admin:REDACTED
+PROXIES=proxy.example.com:8080:user:pass
 ```
 
 #### Поддерживаемые форматы:
@@ -36,7 +36,7 @@ PROXIES=ansible.9qw.ru:8126:admin:REDACTED
    ```env
    PROXIES=host:port:username:password
    ```
-   Пример: `PROXIES=ansible.9qw.ru:8126:admin:REDACTED`
+   Пример: `PROXIES=proxy.example.com:8080:user:pass`
 
 2. **Без авторизации (socks5 по умолчанию):**
    ```env
@@ -49,7 +49,7 @@ PROXIES=ansible.9qw.ru:8126:admin:REDACTED
    PROXIES=type:host:port:username:password
    ```
    Примеры:
-   - SOCKS5: `PROXIES=socks5:ansible.9qw.ru:8126:admin:REDACTED`
+   - SOCKS5: `PROXIES=socks5:proxy.example.com:1080:user:pass`
    - HTTP: `PROXIES=http:proxy.example.com:8080:user:pass`
 
 **Поддерживаемые типы прокси:** 
@@ -102,7 +102,7 @@ pip install git+https://github.com/stufently/session-auth-lib.git
    
    Для SOCKS5 (по умолчанию):
    ```env
-   PROXIES=ansible.9qw.ru:8126:admin:REDACTED
+   PROXIES=proxy.example.com:8080:user:pass
    ```
    
    Для HTTP прокси:
@@ -296,7 +296,7 @@ If the JSON does not contain a string session, the library will try to use a nei
 Библиотека не может работать без прокси. Создайте файл `.env` и укажите данные прокси:
 
 ```env
-PROXIES=ansible.9qw.ru:8126:admin:REDACTED
+PROXIES=proxy.example.com:8080:user:pass
 ```
 
 Или без авторизации:
@@ -313,7 +313,7 @@ PROXIES=proxy.example.com:1080
 
 Пример правильного формата:
 ```env
-PROXIES=ansible.9qw.ru:8126:admin:REDACTED
+PROXIES=proxy.example.com:8080:user:pass
 ```
 
 #### ❌ Ошибка авторизации на прокси
@@ -350,7 +350,7 @@ PROXIES=ansible.9qw.ru:8126:admin:REDACTED
 
 Если вы указываете тип явно, используйте формат:
 ```env
-PROXIES=socks5:ansible.9qw.ru:8126:admin:REDACTED
+PROXIES=socks5:proxy.example.com:1080:user:pass
 ```
 
 ### No account has been loaded

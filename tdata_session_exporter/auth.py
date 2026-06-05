@@ -113,8 +113,8 @@ def get_proxy():
     - type:host:port:username:password   (с указанием типа и авторизацией)
     
     Примеры:
-    - PROXIES=ansible.9qw.ru:8126:admin:REDACTED
-    - PROXIES=socks5:ansible.9qw.ru:8126:admin:REDACTED
+    - PROXIES=proxy.example.com:8080:user:pass
+    - PROXIES=socks5:proxy.example.com:1080:user:pass
     - PROXIES=proxy.example.com:1080
     """
     proxies = os.getenv("PROXIES")
@@ -124,7 +124,7 @@ def get_proxy():
         raise ValueError(
             "❌ ПРОКСИ ОБЯЗАТЕЛЕН! Установите переменную окружения PROXIES\n"
             "Формат: host:port:username:password\n"
-            "Пример: PROXIES=ansible.9qw.ru:8126:admin:пароль"
+            "Пример: PROXIES=proxy.example.com:8080:user:пароль"
         )
     
     # Парсинг строки прокси

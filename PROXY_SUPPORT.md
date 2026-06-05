@@ -60,7 +60,7 @@ def validate_proxy_connection(proxy_conn: dict, timeout: int = 10) -> bool:
 
 ```env
 # .env файл
-PROXIES=ansible.9qw.ru:8126:admin:password
+PROXIES=proxy.example.com:8080:user:pass
 ```
 
 ### HTTP прокси
