@@ -85,17 +85,30 @@ PROXIES=proxy.example.com:8080:user:pass
 
 ## Installation
 
-To install the library, use:
+Install from PyPI (package name: `tdata-session-exporter`):
+
+```bash
+pip install tdata-session-exporter
+```
+
+Или напрямую из git (dev-версия из main):
 
 ```bash
 pip install git+https://github.com/stufently/session-auth-lib.git
 ```
 
+### Release process (maintainers)
+
+Релиз полностью автоматический: бампни `project.version` в `pyproject.toml` и
+запушь в `main`. Workflow `autotag.yml` проверит, что этой версии ещё нет на
+PyPI, создаст тег `v<version>` и запустит `publish.yml` (тест → сборка →
+загрузка на PyPI через Trusted Publishing, без API-токенов).
+
 ## 🚀 Quick Start
 
 1. **Установите библиотеку:**
    ```bash
-   pip install git+https://github.com/stufently/session-auth-lib.git
+   pip install tdata-session-exporter
    ```
 
 2. **Создайте файл `.env` с настройками прокси:**
