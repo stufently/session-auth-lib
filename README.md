@@ -104,6 +104,12 @@ pip install git+https://github.com/stufently/session-auth-lib.git
 PyPI, создаст тег `v<version>` и запустит `publish.yml` (тест → сборка →
 загрузка на PyPI через Trusted Publishing, без API-токенов).
 
+Экшены в этих workflow'ах запинены по commit-SHA (`actions/checkout` в
+`autotag.yml`, `pypa/gh-action-pypi-publish` в `publish.yml`) — шаг публикации
+держит OIDC-токен на аплоад в PyPI, поэтому ссылаться на плавающие
+ветки/теги апстрима там нельзя. Апгрейд экшена = осознанная правка SHA и
+комментария с версией рядом с ним.
+
 ## 🚀 Quick Start
 
 1. **Установите библиотеку:**
